@@ -1,0 +1,13 @@
+  Sure! Here's a summary of the PDF file processing code:
+
+1. Load the required modules, including `dotenv`, `octoai`, `prompts`, `pdf-parse`, and `fs/promises`.
+2. Access the API token from the `.env` file and create a new `Client` instance using the `@octoai/client` module.
+3. Use `prompts` to give the user a choice of OctoAI models to use for text processing. Store the selected model in the `modelSelected` variable.
+4. Use `fs/promises` to read the contents of a folder called `files` and filter out all PDF files.
+5. Map the PDF files to create a list of choices for the user to select one.
+6. Use `prompts` again to give the user a choice of PDF files to use for text processing. Store the selected PDF file in the `pdfselected` variable.
+7. Use `pdf-parse` to extract the text from the selected PDF file, passing in the file contents as a buffer.
+8. Catch any errors that may occur during text extraction and handle them gracefully.
+9. Use the `client` instance to create a completion using the selected model and the extracted text.
+
+The code is using `pdf-parse` to extract the text from the PDF file, which is an asynchronous operation. The `prompts` module is used for presenting choices to the user and gathering input. The `fs/promises` module is used for asynchronous file I/O operations. The `dotenv` module is used to load environment variables, such as the API token.
