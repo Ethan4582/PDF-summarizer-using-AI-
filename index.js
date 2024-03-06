@@ -57,7 +57,7 @@ const client = new Client(process.env.OCTOAI_TOKEN); // Request to access the la
   const dataBuffer = await fs.readFile(`./files/${pdfselected.pdf}`);
 
 
-  let text ; //  declere  as due to try and catch it very unaccessablethe text
+  let text ; //  declare  as due to try and catch it very inaccessible the text
   // Extract text using pdf-parse (assuming async behavior)
   try {
     text = await pdf(dataBuffer).then(data => data.text);
@@ -72,31 +72,31 @@ const client = new Client(process.env.OCTOAI_TOKEN); // Request to access the la
 
  //this to pull out the text from the file 
 
-   //This is the promt of the prompts
+   //This is the prompt of the prompts
 
   
-  // this is the logic for the AI text prpm the user see 
+  // this is the logic for the AI text prompt the user see 
     const completion = await client.chat.completions.create({
-        "model": "llama-2-13b-chat-fp16", //this came a varabile option for  choseing the model 
-        "messages": [//passing an array of meesage how the ai should function 
+        "model": "llama-2-13b-chat-fp16", //this came a variable option for choosing the model 
+        "messages": [//passing an array of message how the AI should function 
             {
                 "role": "system",
-                "content": "Summrise the following pdf ", 
+                "content": "Summarize the following PDF ", 
             },
             {
                 "role": "user",
-                "content": "pdf content:\n"+text,
+                "content": "PDF content:\n"+text,
             }
         ],
     })
-    //this was use to res it in the terminal itself 
+    //this was use to rest it in the terminal itself 
      // console.log(completion.choices[0].message.content);
     
-     //now saving the summry in a file 
+     //now saving the summary in a file 
 fs.writeFile(`./files/${pdfselected.pdf}.txt`,
 completion.choices[0].message.content,'utf-8')
    
-console.log('Summary has be written in  the file ');
+console.log('Summary has been written in the file ');
 
   
 })();
@@ -104,6 +104,6 @@ console.log('Summary has be written in  the file ');
 
 
 
-//!https://www.npmjs.com/package/pdf-parse   sue pre javascript to extarct data form the pdf 
+//!https://www.npmjs.com/package/pdf-parse   use pre JavaScript to extract data from the PDF 
 
-//!   this model's context length (4096)
+//!   this model's context length (4096)               do not change anything just write the comment properly remove spelling mistakes
