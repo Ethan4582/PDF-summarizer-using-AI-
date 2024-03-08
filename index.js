@@ -1,109 +1,156 @@
-require('dotenv').config();
+require('dotenv').config()
 const { Client } = require("@octoai/client");
-// Access the API Token
-
-// Selecting the prompt for different requests from the user
-const prompts = require('prompts'); // Installed prompts
-//! https://www.npmjs.com/package/prompts
-
-// Integrate yargs if needed
-// const yargs = require('yargs');
-
-const pdf = require('pdf-parse'); // Installed pdf-parse
-
-// Since PDF will be located in the 'files' folder
-const fs = require('fs/promises'); // Using promises for async operations
+const pdf = require('pdf-parse');
+const prompts = require('prompts');
+const fs = require('fs/promises');
 const path = require('path');
+prompts.override(require('yargs').argv);
 
-const client = new Client(process.env.OCTOAI_TOKEN); // Request to access the large language model
+// Check if ENV key is set, if not, request user to rename the .env.example file and add the key
+if (!process.env.OCTOAI_TOKEN) {
+	console.log('No OctoAI API key found. Please rename .env.example to .env and add your OctoAI API key.')
+	return
+}
 
+// Connect to the OctoML Client
+const client = new Client(process.env.OCTOAI_TOKEN);
+
+// Run the script in an async function
 (async () => {
-  // Now access the OctoAI models and map them for prompts
-  let models = await client.chat.listAllModels().map(model => ({
-    title: model,
-    value: model
-  }));
 
-  // Give the choice to access different model types
-  const modelSelected = await prompts({
-    type: 'select',
-    name: 'model',
-    message: 'Which model would you like to use?',
-    choices: models,
-    initial: 7 // Initial model (adjust as needed)
-  });
+	let models = await client.chat.listAllModels().map(model => {
+		return { title: model, value: model }
+	})
 
-  const allfiles = await fs.readdir('./files');
+	// Lets the user pick a model
+	const modelSelected = await prompts([
+		{
+			type: 'select',
+			name: 'model',
+			message: 'Pick a model from OctoML',
+			choices: models,
+			initial: 7
+		}
+	]);
+	
+	// If no model is selected, throw an error
+	if (!modelSelected.model) {
+		console.log('No model selected. Please try again.')
+		return
+	}
 
-  // Filter all PDFs in the folder
-  let pdfs = allfiles.filter(file => path.extname(file).toLowerCase() === '.pdf');
+	// Get all the files in the files folder
+	let allFiles = await fs.readdir('./files')
+	let pdfs = allFiles.filter(file => path.extname(file).toLowerCase() === '.pdf');
 
-  // Map and create choices for prompts
-  let choices = pdfs.map(pdf => ({
-    title: pdf,
-    value: pdf
-  }));
+	// Map all the pdfs to an object with a title and value
+	let choices = pdfs.map(pdf => {
+		return { title: pdf, value: `${pdf}` }
+	})
 
-  const pdfselected = await prompts([
-    {
-      type: 'select',
-      name: 'pdf',
-      message: 'Which PDF would you like to use?',
-      choices: choices
-    }
-  ]);
+	// If the folder files has no pdf file extensions, throw an error
+	if (choices.length === 0) {
+		console.log('No PDFs found in ./files folder. Please add some PDFs and try again.')
+		return
+	}
 
-  // Read the selected PDF
-  const dataBuffer = await fs.readFile(`./files/${pdfselected.pdf}`);
+  	// Lets the user pick a PDF to summarize
+	const pdfSelected = await prompts([
+		{
+			type: 'select',
+			name: 'filename',
+			message: 'Pick a PDF to summarize',
+			choices,
+		}
+	]);
 
+	// If no pdf selected, throw an error
+	if (!pdfSelected.filename) {
+		console.log('No PDF selected. Please try again.')
+		return
+	}
 
-  let text ; //  declare  as due to try and catch it very inaccessible the text
-  // Extract text using pdf-parse (assuming async behavior)
-  try {
-    text = await pdf(dataBuffer).then(data => data.text);
-   console.log(text);
- } catch (error) {
-   console.error("Error extracting text:", error.message);
-   // Handle the error gracefully (e.g., inform the user, retry, etc.)
- }
- 
-  // Your remaining code (e.g., interaction with OctoAI)
+	// Add the path to the pdfSelected object
+	pdfSelected.path = `./files/${pdfSelected.filename}`
 
+	// The dataBuffer is a buffer instance, so we need to convert it to a string
+	const dataBuffer = await fs.readFile(pdfSelected.path);
 
- //this to pull out the text from the file 
+	// The pdf function returns a promise, so we need to await it
+	pdfSelected.text = await pdf(dataBuffer).then(data => data.text)
 
-   //This is the prompt of the prompts
+	// Separate pdfSelected.text into 500 character chunks
+	pdfSelected.chunks = []
+	const chunkSize = 500 * 4;
 
-  
-  // this is the logic for the AI text prompt the user see 
-    const completion = await client.chat.completions.create({
-        "model": "llama-2-13b-chat-fp16", //this came a variable option for choosing the model 
-        "messages": [//passing an array of message how the AI should function 
-            {
-                "role": "system",
-                "content": "Summarize the following PDF ", 
-            },
-            {
-                "role": "user",
-                "content": "PDF content:\n"+text,
-            }
-        ],
-    })
-    //this was use to rest it in the terminal itself 
-     // console.log(completion.choices[0].message.content);
-    
-     //now saving the summary in a file 
-fs.writeFile(`./files/${pdfselected.pdf}.txt`,
-completion.choices[0].message.content,'utf-8')
-   
-console.log('Summary has been written in the file ');
+	// Loop through the PDF text and add each chunk to the chunks array
+	for (let i = 0; i < pdfSelected.text.length; i += chunkSize) {
+		pdfSelected.chunks.push(pdfSelected.text.slice(i, i + chunkSize));
+	}
 
-  
+	
+	console.log (`${pdfSelected.filename} has ${pdfSelected.chunks.length} pages and ${pdfSelected.text.length} characteres. This is around ${pdfSelected.text.length/4} tokens.`)
+
+	// Create an array to hold all the AI responses
+	pdfSelected.summaries = []
+
+	
+	
+	// Loop through each chunk and perform an AI lookup
+	for (let i = 0; i < pdfSelected.chunks.length; i++) {
+		const completion = await client.chat.completions.create( {
+				"messages": [
+				{
+					"role": "system",
+					"content": "You are a tool that Summarizes PDF. This tool is a application script that converts inputs PDF content and outputs a list the main points. Do not communicate with the user directly."
+				},
+				{
+					"role": "assistant",
+					"content": `PDF content:\n${pdfSelected.chunks[i]}`
+				},
+				],
+				"model": modelSelected.model,
+				"max_tokens": 500,
+				"presence_penalty": 0,
+				"temperature": 0.1,
+				"top_p": 0.9
+			});
+
+		// Add the AI response to the responses array
+		pdfSelected.summaries.push(completion.choices[0].message.content)
+		
+	}
+
+	// combine the summaries array into one string then export
+	let summary = pdfSelected.summaries.join('\n\n')
+
+	// Summary of the summary if the summary is too long (over 500 characters)
+	if (summary.length > 500) {
+		const completion = await client.chat.completions.create( {
+				"messages": [
+				{
+					"role": "system",
+					"content": "You are a tool that Summarizes PDF. This tool is a application script that converts inputs PDF content and outputs a list the main points. Do not communicate with the user directly."
+				},
+				{
+					"role": "user",
+					"content": `PDF content:\n${summary}`
+				}
+				],
+				"model": modelSelected.model,
+				"max_tokens": 500,
+				"presence_penalty": 0,
+				"temperature": 0.1,
+				"top_p": 0.9
+			});
+			// If response is receieved, update summary with new summary
+			if(completion.choices[0].message.content){
+				summary = completion.choices[0].message.content
+			}
+	}
+
+	// using fs export the summaries to a file
+	fs.writeFile(`./files/${pdfSelected.filename.replace('.pdf', '')}.txt`, summary);
+	console.log(`Summary saved to ./files/${pdfSelected.filename.replace('.pdf', '')}.txt`)
+
 })();
-
-
-
-
-//!https://www.npmjs.com/package/pdf-parse   use pre JavaScript to extract data from the PDF 
-
-//!   this model's context length (4096)               do not change anything just write the comment properly remove spelling mistakes
